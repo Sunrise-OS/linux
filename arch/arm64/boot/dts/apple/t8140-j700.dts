@@ -10,6 +10,7 @@
 /dts-v1/;
 
 #include "t8140.dtsi"
+#include <dt-bindings/thermal/thermal.h>
 
 / {
 	compatible = "apple,j700", "apple,t8140", "apple,arm-platform";
@@ -50,6 +51,311 @@
 	memory@10000000000 {
 		device_type = "memory";
 		reg = <0x100 0 0x2 0>; /* To be filled by loader */
+	};
+
+	/*
+	 * The J700 is fanless: the CPUs are the only cooling devices.  Every
+	 * die sensor gets a zone that throttles both clusters, since they share
+	 * one die and one heat spreader.  The power allocator splits the budget
+	 * by the energy models, with the E cluster weighted three to one: its
+	 * cores do several times more work per watt, so all-core loads keep
+	 * them at full speed and trim the P cores instead.
+	 *
+	 * The SMC refreshes these readings about once a second, while the die
+	 * settles within that time after a power change, so the loop has a
+	 * full sample of delay.  The governor derives its gains from
+	 * sustainable-power and the gap between the first (switch-on) and last
+	 * (control) passive trips; the gap of 62 C gives 40/80/8 mW per C,
+	 * the highest gains that held a constant clock on this machine (the
+	 * default 15 C gap oscillated between the lowest and highest P-state).
+	 * The machine never idles below about 45 C, so the governor is always
+	 * engaged, which is intended: the die can gain 40 C within one sensor
+	 * period, and dual-core bursts from idle have to be limited before
+	 * the first reading arrives.  sustainable-power is the energy-model
+	 * power the machine held at about 93 C in a 75 s sustained load.
+	 */
+	thermal-zones {
+		cpu-e0-thermal {
+			polling-delay-passive = <500>;
+			polling-delay = <500>;
+			thermal-sensors = <&smc_hwmon 0>;	/* Te05 */
+			sustainable-power = <2500>;
+
+			trips {
+				cpu_e0_alert: trip-alert {
+					temperature = <33000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				cpu_e0_control: trip-control {
+					temperature = <95000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				trip-critical {
+					temperature = <110000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_e0_control>;
+					cooling-device =
+						<&cpu_p0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_p1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <1024>;
+				};
+
+				map1 {
+					trip = <&cpu_e0_control>;
+					cooling-device =
+						<&cpu_e0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <3072>;
+				};
+			};
+		};
+
+		cpu-e1-thermal {
+			polling-delay-passive = <500>;
+			polling-delay = <500>;
+			thermal-sensors = <&smc_hwmon 1>;	/* Te0S */
+			sustainable-power = <2500>;
+
+			trips {
+				cpu_e1_alert: trip-alert {
+					temperature = <33000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				cpu_e1_control: trip-control {
+					temperature = <95000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				trip-critical {
+					temperature = <110000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_e1_control>;
+					cooling-device =
+						<&cpu_p0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_p1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <1024>;
+				};
+
+				map1 {
+					trip = <&cpu_e1_control>;
+					cooling-device =
+						<&cpu_e0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <3072>;
+				};
+			};
+		};
+
+		cpu-p0-thermal {
+			polling-delay-passive = <500>;
+			polling-delay = <500>;
+			thermal-sensors = <&smc_hwmon 2>;	/* Tp01 */
+			sustainable-power = <2500>;
+
+			trips {
+				cpu_p0_alert: trip-alert {
+					temperature = <33000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				cpu_p0_control: trip-control {
+					temperature = <95000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				trip-critical {
+					temperature = <110000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_p0_control>;
+					cooling-device =
+						<&cpu_p0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_p1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <1024>;
+				};
+
+				map1 {
+					trip = <&cpu_p0_control>;
+					cooling-device =
+						<&cpu_e0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <3072>;
+				};
+			};
+		};
+
+		cpu-p1-thermal {
+			polling-delay-passive = <500>;
+			polling-delay = <500>;
+			thermal-sensors = <&smc_hwmon 3>;	/* Tp05 */
+			sustainable-power = <2500>;
+
+			trips {
+				cpu_p1_alert: trip-alert {
+					temperature = <33000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				cpu_p1_control: trip-control {
+					temperature = <95000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				trip-critical {
+					temperature = <110000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_p1_control>;
+					cooling-device =
+						<&cpu_p0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_p1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <1024>;
+				};
+
+				map1 {
+					trip = <&cpu_p1_control>;
+					cooling-device =
+						<&cpu_e0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <3072>;
+				};
+			};
+		};
+
+		cpu-p2-thermal {
+			polling-delay-passive = <500>;
+			polling-delay = <500>;
+			thermal-sensors = <&smc_hwmon 4>;	/* Tp09 */
+			sustainable-power = <2500>;
+
+			trips {
+				cpu_p2_alert: trip-alert {
+					temperature = <33000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				cpu_p2_control: trip-control {
+					temperature = <95000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				trip-critical {
+					temperature = <110000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_p2_control>;
+					cooling-device =
+						<&cpu_p0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_p1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <1024>;
+				};
+
+				map1 {
+					trip = <&cpu_p2_control>;
+					cooling-device =
+						<&cpu_e0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <3072>;
+				};
+			};
+		};
+
+		cpu-p3-thermal {
+			polling-delay-passive = <500>;
+			polling-delay = <500>;
+			thermal-sensors = <&smc_hwmon 5>;	/* Tp0D */
+			sustainable-power = <2500>;
+
+			trips {
+				cpu_p3_alert: trip-alert {
+					temperature = <33000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				cpu_p3_control: trip-control {
+					temperature = <95000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				trip-critical {
+					temperature = <110000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_p3_control>;
+					cooling-device =
+						<&cpu_p0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_p1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <1024>;
+				};
+
+				map1 {
+					trip = <&cpu_p3_control>;
+					cooling-device =
+						<&cpu_e0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&cpu_e3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					contribution = <3072>;
+				};
+			};
+		};
 	};
 };
 
