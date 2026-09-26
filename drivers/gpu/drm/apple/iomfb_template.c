@@ -1060,6 +1060,8 @@ static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
 	    READ_ONCE(dcp->typec_crtc_off) &&
 	    READ_ONCE(dcp->typec_cable_connected))
 		return;
+	if (dcp_is_typec_output(dcp) && *connected && dcp->nr_modes)
+		complete_all(&dcp->typec_iomfb_hpd_ready);
 
 	if (dcp->during_modeset) {
 		/*
