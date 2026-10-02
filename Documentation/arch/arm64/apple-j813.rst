@@ -8,15 +8,83 @@ J813 is the 13-inch M5 MacBook Air (T8142, Mac17,3). This configuration
 provides an initial RAM-only boot path: one boot CPU, AICv3, architectural
 timers, DockChannel console and the framebuffer left by the boot firmware.
 
-The device tree describes all ten CPU affinities so the loader can identify
-the boot CPU. It does not qualify SMP. Keep secondary cores stopped in
-m1n1 and use ``maxcpus=1`` for this milestone. The loader removes unavailable
-CPUs and fills the release addresses of the remaining nodes. The P-core
+The device tree describes all ten CPU affinities. For the initial one-CPU
+baseline, keep secondary cores stopped in m1n1 and use ``maxcpus=1``.
+The loader removes unavailable CPUs and fills the release addresses of the
+remaining nodes. The P-core
 affinities are 0x10100 through 0x10103, rather than the 0x100 through 0x103
 values in the Apple Device Tree.
 
 The CPU compatible strings identify T8142 explicitly. The firmware's reused
 ``sawtooth`` and ``everest`` names do not identify the M5 microarchitecture.
+
+SMP bring-up
+============
+
+M5 secondary CPUs can return from WFI with cleared general-purpose registers.
+Both M5 MIDRs (parts 0x062 and 0x063) select the Apple register-preserving idle
+path. Without it, all ten CPUs can start and then panic in their idle tasks.
+
+SMP also requires the M5-capable m1n1 secondary-start path: dense PMGR CPU
+masks, correct reset vectors and per-core stacks. Verify all ten cores there
+before preparing the FDT, and use ``maxcpus=10`` for the Linux test. The
+existing J813 DT and configuration support this handoff.
+
+On J813, this path reached the RAM shell with CPUs 0-9 online. A five-second
+sleep advanced every CPU's architectural timer count by 1,251 interrupts.
+Ten concurrent, individually pinned jobs each hashed 16 MiB of zeros to
+``080acf35a507ac9849cfcba47dc2ad83e01b75663a516279c8b9d243b719643e``.
+Verify affinity through ``Cpus_allowed_list`` and retain the console output,
+kernel configuration hash and payload hashes when repeating the test.
+Hotplug, deep sleep and KVM remain unqualified.
+
+CPU frequency bring-up
+======================
+
+The T8142 cluster controllers use five-bit P-state requests with busy and
+command-state readback. The driver preserves firmware voltage, PLL and
+CLPC/PMP configuration, and stops issuing requests after a timeout or an
+unexpected command state. Unlike T8140, this initial J813 path does not
+register a Linux SMC thermal policy. The DT exposes only states up to the
+measured firmware handoff values; higher states remain unqualified.
+
+State 1 is 300 MHz on both clusters. The firmware SRAM voltage tables begin
+at state 2: the E cluster exposes 300/972 MHz, and the P cluster exposes
+300/1308/1608/1932/2220/2508/2820/3072/3300/3516 MHz. A dependent decrement
+loop timed against CNTPCT_EL0 in m1n1 confirmed this mapping on J813.
+``scaling_cur_freq`` reports the requested state, not an independent clock
+measurement or a guarantee against firmware throttling.
+
+The configuration enables the userspace governor. On a fresh ten-core boot,
+capture a sweep of both policies to the host serial log::
+
+  set -e
+  for p in /sys/devices/system/cpu/cpufreq/policy*; do
+      cat "$p/affected_cpus"
+      echo userspace > "$p/scaling_governor"
+      for round in 1 2; do
+          for f in $(cat "$p/scaling_available_frequencies"); do
+              echo "$f" > "$p/scaling_setspeed"
+              test "$(cat "$p/scaling_cur_freq")" = "$f"
+              echo "$p $f"
+              sleep 0.02
+          done
+      done
+      cat "$p/cpuinfo_max_freq" > "$p/scaling_setspeed"
+      cat "$p/stats/total_trans"
+  done
+  dmesg
+
+Retain the transcript and payload hashes. Qualification also compared three
+pairs of pinned, checksum-verified integer workloads at each cluster's
+minimum and maximum states and checked every CPU's timer and pinned SHA-256
+job afterwards. Short frequency sweeps do not qualify sustained thermal
+behavior, automatic governors, suspend or states above the handoff limit.
+
+T8142 can also lose registers on WFIT in delay loops. Frequency transition
+polling exposed this as a cleared pointer in the cpufreq driver. T8142 uses
+the existing counter delay loop, avoiding low-power waits with live kernel
+register state.
 
 Bootloader requirements
 =======================
@@ -58,7 +126,7 @@ cross-compiling with GCC from another architecture.
 With dtschema installed, check the affected bindings and DTB::
 
   make ARCH=arm64 O="$out" CHECK_DTBS=y \
-      DT_SCHEMA_FILES=arm/apple.yaml:arm/cpus.yaml:interrupt-controller/apple,aic2.yaml:serial/apple,dockchannel-uart.yaml:serial/samsung_uart.yaml:display/simple-framebuffer.yaml \
+      DT_SCHEMA_FILES=arm/apple.yaml:arm/cpus.yaml:cpufreq/apple,cluster-cpufreq.yaml:opp/opp-v2-base.yaml:interrupt-controller/apple,aic2.yaml:serial/apple,dockchannel-uart.yaml:serial/samsung_uart.yaml:display/simple-framebuffer.yaml \
       apple/t8142-j813.dtb
 
 Boot and qualification
@@ -103,7 +171,7 @@ RAM boot. Preserve the complete console transcript and a hash manifest;
 an Image build or successful loader exit alone is not a boot result.
 Review captures for device identifiers and boot entropy before publishing.
 
-This milestone does not establish SMP, CPU hotplug, KVM guest timers,
-cpufreq, suspend, native DCP, GPU acceleration, built-in input, USB,
+These tests do not establish CPU hotplug, KVM guest timers,
+sustained thermal behavior, suspend, native DCP, GPU acceleration, built-in input, USB,
 storage, networking or audio support. The disabled Samsung UART node
 records its measured resources; the qualified console path is DockChannel.
