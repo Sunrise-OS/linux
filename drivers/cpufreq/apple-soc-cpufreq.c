@@ -64,6 +64,7 @@
 struct apple_soc_cpufreq_info {
 	bool has_ps2;
 	bool verify_transition;
+	bool needs_thermal_policy;
 	u64 min_pstate;
 	u64 max_pstate;
 	u64 cur_pstate_mask;
@@ -118,6 +119,16 @@ static const struct apple_soc_cpufreq_info soc_t8112_info = {
  */
 static const struct apple_soc_cpufreq_info soc_t8140_info = {
 	.verify_transition = true,
+	.needs_thermal_policy = true,
+	.min_pstate = 1,
+	.max_pstate = 31,
+	.ps1_mask = APPLE_DVFS_CMD_PS1,
+	.ps1_shift = APPLE_DVFS_CMD_PS1_SHIFT,
+};
+
+/* T8142 command-state readback; firmware retains CLPC/PMP ownership. */
+static const struct apple_soc_cpufreq_info soc_t8142_info = {
+	.verify_transition = true,
 	.min_pstate = 1,
 	.max_pstate = 31,
 	.ps1_mask = APPLE_DVFS_CMD_PS1,
@@ -152,6 +163,10 @@ static const struct of_device_id apple_soc_cpufreq_of_match[] __maybe_unused = {
 	{
 		.compatible = "apple,t8140-cluster-cpufreq",
 		.data = &soc_t8140_info,
+	},
+	{
+		.compatible = "apple,t8142-cluster-cpufreq",
+		.data = &soc_t8142_info,
 	},
 	{}
 };
@@ -403,7 +418,7 @@ static int apple_soc_cpufreq_init(struct cpufreq_policy *policy)
 	policy->dvfs_possible_from_any_cpu = true;
 	policy->fast_switch_possible = !info->verify_transition;
 	policy->suspend_freq = freq_table[0].frequency;
-	if (info->verify_transition) {
+	if (info->needs_thermal_policy) {
 		struct device_node *hwmon;
 		bool higher = false;
 		bool thermal;
