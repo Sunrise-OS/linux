@@ -5,10 +5,10 @@
  * Initial bring-up description derived from the Android gs201 device tree.
  *
  * This is an incremental bring-up description. Clock providers exist for
- * TOP, MISC, PERIC0/1, HSI0/2, DPU and DISP; the UART, watchdog and UFS
- * consumers use them. The USB controller and the display pipeline still
- * adopt bootloader-owned clock state. Pinctrl and power-domain support are
- * not yet described.
+ * TOP, MISC, PERIC0/1, HSI0/2, DPU and DISP; the UART, watchdog, UFS and
+ * display consumers use them. The USB controller still adopts the
+ * bootloader-owned clock state. Pinctrl and power-domain support are not
+ * yet described.
  * Drivers for the gs101 are reused through their gs101 compatibles where the
  * IP is the same.
  *
@@ -582,6 +582,12 @@
 			compatible = "google,gs201-dpu";
 			reg = <0x1c240000 0x6000>, <0x1c0b0000 0x6000>;
 			reg-names = "decon", "dpp";
+			clocks = <&cmu_dpu CLK_GOUT_DPU_DPUF_ACLK_DMA>,
+				 <&cmu_dpu CLK_GOUT_DPU_DPUF_ACLK_DPP>,
+				 <&cmu_dpu CLK_GOUT_DPU_AD_APB_DPU_DMA_PCLKM>,
+				 <&cmu_disp CLK_GOUT_DISP_DPUB_ACLK_DECON>,
+				 <&cmu_disp CLK_GOUT_DISP_AD_APB_DECON_MAIN_PCLKM>;
+			clock-names = "dma", "dpp", "dpu-apb", "decon", "disp-apb";
 			status = "disabled";
 
 			port {
@@ -594,6 +600,8 @@
 		dsim0: dsi@1c2c0000 {
 			compatible = "google,gs201-dsim";
 			reg = <0x1c2c0000 0x300>;
+			clocks = <&cmu_disp CLK_GOUT_DISP_DPUB_ACLK_DECON>;
+			clock-names = "bus";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
@@ -614,6 +622,7 @@
 		sysreg_hsi2: syscon@14420000 {
 			compatible = "google,gs101-hsi2-sysreg", "syscon";
 			reg = <0x14420000 0x10000>;
+			clocks = <&cmu_hsi2 CLK_GOUT_HSI2_SYSREG_HSI2_PCLK>;
 		};
 
 		ufs_0: ufs@14700000 {
