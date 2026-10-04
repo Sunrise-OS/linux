@@ -7,8 +7,8 @@
  * This is an incremental bring-up description. Clock providers exist for
  * TOP, MISC, PERIC0/1, HSI0/2, DPU and DISP; the UART, watchdog, UFS and
  * display consumers use them. The USB controller still adopts the
- * bootloader-owned clock state. Pinctrl and power-domain support are not
- * yet described.
+ * bootloader-owned clock state. Pinctrl is described for the pin groups in
+ * use; power-domain support is not yet described.
  * Drivers for the gs101 are reused through their gs101 compatibles where the
  * IP is the same.
  *
@@ -27,6 +27,15 @@
 	interrupt-parent = <&gic>;
 
 	aliases {
+		pinctrl0 = &pinctrl_gpio_alive;
+		pinctrl1 = &pinctrl_far_alive;
+		pinctrl2 = &pinctrl_gsacore;
+		pinctrl3 = &pinctrl_gsactrl;
+		pinctrl4 = &pinctrl_peric0;
+		pinctrl5 = &pinctrl_peric1;
+		pinctrl6 = &pinctrl_hsi1;
+		pinctrl7 = &pinctrl_hsi2;
+		pinctrl8 = &pinctrl_hsi2ufs;
 		serial0 = &serial_0;
 	};
 
@@ -525,6 +534,8 @@
 				 <&cmu_peric0 CLK_GOUT_PERIC0_USI0_UART_IPCLK>;
 			clock-names = "uart", "clk_uart_baud0";
 			interrupts = <GIC_SPI 673 IRQ_TYPE_LEVEL_HIGH 0>;
+			pinctrl-0 = <&uart0_bus>;
+			pinctrl-names = "default";
 			samsung,uart-fifosize = <256>;
 
 			status = "disabled";
@@ -643,6 +654,8 @@
 				      "aclk", "pclk", "sysreg";
 			dma-coherent;
 			freq-table-hz = <0 0>, <0 0>, <0 0>, <0 0>, <0 0>, <0 0>;
+			pinctrl-0 = <&ufs_rst_n &ufs_refclk_out>;
+			pinctrl-names = "default";
 			phys = <&ufs_0_phy>;
 			phy-names = "ufs-phy";
 			samsung,sysreg = <&sysreg_hsi2 0x710>;
@@ -662,6 +675,76 @@
 			status = "disabled";
 		};
 
+		pinctrl_peric0: pinctrl@10840000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x10840000 0x1000>;
+			clocks = <&cmu_peric0 CLK_GOUT_PERIC0_GPIO_PERIC0_PCLK>;
+			clock-names = "pclk";
+			interrupts = <GIC_SPI 664 IRQ_TYPE_LEVEL_HIGH 0>;
+		};
+
+		pinctrl_peric1: pinctrl@10c40000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x10c40000 0x1000>;
+			clocks = <&cmu_peric1 CLK_GOUT_PERIC1_GPIO_PERIC1_PCLK>;
+			clock-names = "pclk";
+			interrupts = <GIC_SPI 683 IRQ_TYPE_LEVEL_HIGH 0>;
+		};
+
+		pinctrl_hsi1: pinctrl@11840000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x11840000 0x1000>;
+			interrupts = <GIC_SPI 387 IRQ_TYPE_LEVEL_HIGH 0>;
+		};
+
+		pinctrl_hsi2: pinctrl@14440000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x14440000 0x1000>;
+			clocks = <&cmu_hsi2 CLK_GOUT_HSI2_GPIO_HSI2_PCLK>;
+			clock-names = "pclk";
+			interrupts = <GIC_SPI 421 IRQ_TYPE_LEVEL_HIGH 0>;
+		};
+
+		pinctrl_hsi2ufs: pinctrl@14460000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x14460000 0x1000>;
+			clocks = <&cmu_hsi2 CLK_GOUT_HSI2_GPIO_HSI2UFS_PCLK>;
+			clock-names = "pclk";
+			interrupts = <GIC_SPI 422 IRQ_TYPE_LEVEL_HIGH 0>;
+		};
+
+		pinctrl_gsactrl: pinctrl@17940000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x17940000 0x1000>;
+		};
+
+		pinctrl_gsacore: pinctrl@17a80000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x17a80000 0x1000>;
+		};
+
+		pinctrl_gpio_alive: pinctrl@180d0000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x180d0000 0x1000>;
+
+			wakeup-interrupt-controller {
+				compatible = "google,gs101-wakeup-eint",
+					     "samsung,exynos850-wakeup-eint",
+					     "samsung,exynos7-wakeup-eint";
+			};
+		};
+
+		pinctrl_far_alive: pinctrl@180e0000 {
+			compatible = "google,gs201-pinctrl";
+			reg = <0x180e0000 0x1000>;
+
+			wakeup-interrupt-controller {
+				compatible = "google,gs101-wakeup-eint",
+					     "samsung,exynos850-wakeup-eint",
+					     "samsung,exynos7-wakeup-eint";
+			};
+		};
+
 		pmu_system_controller: system-controller@18060000 {
 			compatible = "google,gs101-pmu";
 			reg = <0x18060000 0x10000>;
@@ -678,3 +761,5 @@
 		   <GIC_PPI 12 (GIC_CPU_MASK_SIMPLE(8) | IRQ_TYPE_LEVEL_LOW) 0>;
 	};
 };
+
+#include "gs201-pinctrl.dtsi"
