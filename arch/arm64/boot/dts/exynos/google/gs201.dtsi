@@ -18,6 +18,7 @@
 #include <dt-bindings/clock/google,gs201.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/soc/samsung,exynos-usi.h>
 
 / {
 	compatible = "google,gs201";
@@ -742,6 +743,43 @@
 				compatible = "google,gs101-wakeup-eint",
 					     "samsung,exynos850-wakeup-eint",
 					     "samsung,exynos7-wakeup-eint";
+			};
+		};
+
+		sysreg_peric1: syscon@10c20000 {
+			compatible = "google,gs101-peric1-sysreg", "syscon";
+			reg = <0x10c20000 0x10000>;
+			clocks = <&cmu_peric1 CLK_GOUT_PERIC1_SYSREG_PERIC1_PCLK>;
+		};
+
+		/* PERIC1 USI0 in SPI mode: touchscreen */
+		usi_spi0: usi@10d100c0 {
+			compatible = "google,gs101-usi", "samsung,exynos850-usi";
+			reg = <0x10d100c0 0x20>;
+			ranges;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			clocks = <&cmu_peric1 CLK_GOUT_PERIC1_USI0_USI_PCLK>,
+				 <&cmu_peric1 CLK_GOUT_PERIC1_USI0_USI_IPCLK>;
+			clock-names = "pclk", "ipclk";
+			samsung,sysreg = <&sysreg_peric1 0x1000>;
+			samsung,mode = <USI_V2_SPI>;
+
+			status = "disabled";
+
+			spi_0: spi@10d10000 {
+				compatible = "google,gs101-spi";
+				reg = <0x10d10000 0x30>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				clocks = <&cmu_peric1 CLK_GOUT_PERIC1_USI0_USI_PCLK>,
+					 <&cmu_peric1 CLK_GOUT_PERIC1_USI0_USI_IPCLK>;
+				clock-names = "spi", "spi_busclk0";
+				interrupts = <GIC_SPI 690 IRQ_TYPE_LEVEL_HIGH 0>;
+				pinctrl-0 = <&ts_spi_bus_active &ts_spi_miso_active &ts_spi_cs_active>;
+				pinctrl-names = "default";
+
+				status = "disabled";
 			};
 		};
 
