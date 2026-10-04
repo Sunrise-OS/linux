@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Lynx (Pixel 7a) Device Tree
+ *
+ * Copyright 2022-2026 Google LLC
+ */
+
+/dts-v1/;
+
+#include "gs201.dtsi"
+
+/ {
+	model = "Google Pixel 7a (Lynx)";
+	compatible = "google,gs201-lynx", "google,gs201";
+
+	chosen {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		ranges;
+
+		stdout-path = "serial0:115200n8";
+
+		/* Use display framebuffer as setup by bootloader */
+		framebuffer0: framebuffer-0 {
+			compatible = "simple-framebuffer";
+			memory-region = <&cont_splash_mem>;
+			width = <1080>;
+			height = <2400>;
+			stride = <(1080 * 4)>;
+			format = "a8r8g8b8";
+		};
+	};
+
+	reserved-memory {
+		cont_splash_mem: splash@fac00000 {
+			reg = <0x0 0xfac00000 (1080 * 2400 * 4)>;
+			no-map;
+		};
+	};
+};
+
+&serial_0 {
+	status = "okay";
+};
+
+&watchdog_cl0 {
+	status = "okay";
+};
+
+&watchdog_cl1 {
+	status = "okay";
+};
+
+&ufs_0 {
+	status = "okay";
+};
+
+&ufs_0_phy {
+	status = "okay";
+};
+
+/* TEMP-DEBUG T1: glue enabled, child without ref clock / phys */
+&usbdrd31_dwc3 {
+	/delete-property/ clocks;
+	/delete-property/ clock-names;
+	/delete-property/ phys;
+	/delete-property/ phy-names;
+};
