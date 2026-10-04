@@ -4,16 +4,17 @@
  *
  * Initial bring-up description derived from the Android gs201 device tree.
  *
- * Only the blocks that are required to boot to a console with a
- * bootloader-provided framebuffer are described. There is no CMU (clock),
- * pinctrl or power-domain driver for gs201 yet, so everything that the
- * bootloader left running is described with fixed-clock placeholders.
+ * This is an incremental bring-up description. Selected CMU clock providers
+ * are present; peripheral consumers not yet migrated still use fixed-clock
+ * placeholders for bootloader-owned state. Pinctrl and power-domain support
+ * are not yet described.
  * Drivers for the gs101 are reused through their gs101 compatibles where the
  * IP is the same.
  *
  * Copyright 2020-2026 Google LLC
  */
 
+#include <dt-bindings/clock/google,gs201.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
@@ -201,6 +202,39 @@
 		#clock-cells = <0>;
 		clock-frequency = <24576000>;
 		clock-output-names = "oscclk";
+	};
+
+	cmu_misc: clock-controller@10010000 {
+		compatible = "google,gs201-cmu-misc";
+		reg = <0x0 0x10010000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>,
+			 <&cmu_top CLK_GOUT_CMU_MISC_NOC>,
+			 <&cmu_top CLK_GOUT_CMU_MISC_SSS>;
+		clock-names = "oscclk", "bus", "sss";
+		status = "disabled";
+	};
+
+	cmu_peric0: clock-controller@10800000 {
+		compatible = "google,gs201-cmu-peric0";
+		reg = <0x0 0x10800000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>,
+			 <&cmu_top CLK_GOUT_CMU_PERIC0_NOC>,
+			 <&cmu_top CLK_GOUT_CMU_PERIC0_IP>;
+		clock-names = "oscclk", "bus", "ip";
+		status = "disabled";
+	};
+
+	cmu_peric1: clock-controller@10c00000 {
+		compatible = "google,gs201-cmu-peric1";
+		reg = <0x0 0x10c00000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>,
+			 <&cmu_top CLK_GOUT_CMU_PERIC1_NOC>,
+			 <&cmu_top CLK_GOUT_CMU_PERIC1_IP>;
+		clock-names = "oscclk", "bus", "ip";
+		status = "disabled";
 	};
 
 	cmu_top: clock-controller@1e080000 {

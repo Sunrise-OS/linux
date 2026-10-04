@@ -39,7 +39,19 @@
 	};
 };
 
-/* Bring-up: TOP only; leave peripheral consumers on the existing stubs. */
+/* Bring-up: register providers; keep peripheral consumers on existing stubs. */
+&cmu_misc {
+	status = "okay";
+};
+
+&cmu_peric0 {
+	status = "okay";
+};
+
+&cmu_peric1 {
+	status = "okay";
+};
+
 &cmu_top {
 	status = "okay";
 };
