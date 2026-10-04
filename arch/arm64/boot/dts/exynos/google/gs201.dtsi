@@ -525,6 +525,14 @@
 			};
 		};
 
+		/* DECON0 + DPP DMA channels; DSIM0 and the panel come later */
+		dpu: display-controller@1c240000 {
+			compatible = "google,gs201-dpu";
+			reg = <0x1c240000 0x6000>, <0x1c0b0000 0x6000>;
+			reg-names = "decon", "dpp";
+			status = "disabled";
+		};
+
 		sysreg_hsi2: syscon@14420000 {
 			compatible = "google,gs101-hsi2-sysreg", "syscon";
 			reg = <0x14420000 0x10000>;

@@ -39,6 +39,10 @@
 	};
 };
 
+&dpu {
+	status = "okay";
+};
+
 &serial_0 {
 	status = "okay";
 };
