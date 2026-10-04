@@ -43,6 +43,15 @@
 	status = "okay";
 };
 
+&dsim0 {
+	status = "okay";
+
+	panel@0 {
+		compatible = "samsung,s6e3fc5";
+		reg = <0>;
+	};
+};
+
 &serial_0 {
 	status = "okay";
 };

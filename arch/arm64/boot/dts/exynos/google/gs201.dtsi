@@ -531,6 +531,32 @@
 			reg = <0x1c240000 0x6000>, <0x1c0b0000 0x6000>;
 			reg-names = "decon", "dpp";
 			status = "disabled";
+
+			port {
+				dpu_out: endpoint {
+					remote-endpoint = <&dsim0_in>;
+				};
+			};
+		};
+
+		dsim0: dsi@1c2c0000 {
+			compatible = "google,gs201-dsim";
+			reg = <0x1c2c0000 0x300>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+					dsim0_in: endpoint {
+						remote-endpoint = <&dpu_out>;
+					};
+				};
+			};
 		};
 
 		sysreg_hsi2: syscon@14420000 {

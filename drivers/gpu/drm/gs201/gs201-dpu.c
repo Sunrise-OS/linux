@@ -14,10 +14,13 @@
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
+#include <linux/of.h>
+#include <linux/of_graph.h>
 #include <linux/platform_device.h>
 
 #include <drm/clients/drm_client_setup.h>
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_bridge.h>
 #include <drm/drm_connector.h>
 #include <drm/drm_damage_helper.h>
 #include <drm/drm_drv.h>
@@ -213,6 +216,7 @@ static int gs201_dpu_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct gs201_dpu *dpu;
+	struct device_node *endpoint;
 	struct drm_device *drm;
 	int ret;
 
@@ -247,21 +251,45 @@ static int gs201_dpu_probe(struct platform_device *pdev)
 	drm->mode_config.max_height = GS201_DPU_HEIGHT;
 	drm->mode_config.funcs = &gs201_dpu_mode_config_funcs;
 
-	drm_connector_helper_add(&dpu->connector,
-				 &gs201_dpu_connector_helper_funcs);
-	ret = drm_connector_init(drm, &dpu->connector,
-				 &gs201_dpu_connector_funcs,
-				 DRM_MODE_CONNECTOR_DSI);
-	if (ret)
-		return ret;
+	endpoint = of_graph_get_endpoint_by_regs(dev->of_node, 0, -1);
+	if (endpoint) {
+		struct device_node *remote __free(device_node) =
+			of_graph_get_remote_port_parent(endpoint);
+		struct drm_bridge *bridge __free(drm_bridge_put) = NULL;
 
-	ret = drm_simple_display_pipe_init(drm, &dpu->pipe,
-					   &gs201_dpu_pipe_funcs,
-					   gs201_dpu_formats,
-					   ARRAY_SIZE(gs201_dpu_formats),
-					   NULL, &dpu->connector);
-	if (ret)
-		return ret;
+		of_node_put(endpoint);
+		if (remote)
+			bridge = of_drm_find_and_get_bridge(remote);
+		if (!bridge)
+			return -EPROBE_DEFER;
+
+		ret = drm_simple_display_pipe_init(
+			drm, &dpu->pipe, &gs201_dpu_pipe_funcs,
+			gs201_dpu_formats, ARRAY_SIZE(gs201_dpu_formats), NULL,
+			NULL);
+		if (ret)
+			return ret;
+
+		ret = drm_simple_display_pipe_attach_bridge(&dpu->pipe, bridge);
+		if (ret)
+			return ret;
+	} else {
+		/* No DSI bridge described: fixed connector, panel untouched */
+		drm_connector_helper_add(&dpu->connector,
+					 &gs201_dpu_connector_helper_funcs);
+		ret = drm_connector_init(drm, &dpu->connector,
+					 &gs201_dpu_connector_funcs,
+					 DRM_MODE_CONNECTOR_DSI);
+		if (ret)
+			return ret;
+
+		ret = drm_simple_display_pipe_init(
+			drm, &dpu->pipe, &gs201_dpu_pipe_funcs,
+			gs201_dpu_formats, ARRAY_SIZE(gs201_dpu_formats), NULL,
+			&dpu->connector);
+		if (ret)
+			return ret;
+	}
 
 	drm_plane_enable_fb_damage_clips(&dpu->pipe.plane);
 	drm_mode_config_reset(drm);

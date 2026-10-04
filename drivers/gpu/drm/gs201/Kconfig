@@ -9,3 +9,13 @@ config DRM_GS201_DPU
 	  Display controller driver for the Google Tensor G2 (GS201), as found
 	  in the Pixel 7 and 7a. Initially this adopts the DECON/DPP/DSIM
 	  pipeline and command-mode panel left running by the bootloader.
+
+config DRM_GS201_DSIM
+	tristate "Google Tensor GS201 MIPI DSI host"
+	depends on DRM && OF && (ARCH_EXYNOS || COMPILE_TEST)
+	select DRM_MIPI_DSI
+	select DRM_PANEL_BRIDGE
+	help
+	  MIPI DSI host controller (DSIM) of the Google Tensor G2. This stage
+	  adopts the link, clocks and D-PHY configured by the bootloader and
+	  only provides the command FIFO interface to the panel.
