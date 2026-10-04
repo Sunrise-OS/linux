@@ -122,8 +122,6 @@ static void gs201_dpu_enable(struct drm_simple_display_pipe *pipe,
 {
 	struct gs201_dpu *dpu = to_dpu(pipe->crtc.dev);
 
-	dpp_write(dpu, DPP_SRC_SIZE,
-		  (GS201_DPU_HEIGHT << 16) | GS201_DPU_WIDTH);
 	dpp_write(dpu, DPP_IMG_SIZE,
 		  (GS201_DPU_HEIGHT << 16) | GS201_DPU_WIDTH);
 }
@@ -142,6 +140,12 @@ static void gs201_dpu_update(struct drm_simple_display_pipe *pipe,
 	if (!state->fb)
 		return;
 
+	/*
+	 * SRC_SIZE is the frame size as laid out in memory; linear RGB has no
+	 * stride register, so a padded pitch is expressed as a wider frame.
+	 */
+	dpp_write(dpu, DPP_SRC_SIZE,
+		  (state->fb->height << 16) | (state->fb->pitches[0] / 4));
 	dpp_write(dpu, DPP_BASEADDR_Y8,
 		  lower_32_bits(drm_fb_dma_get_gem_addr(state->fb, state, 0)));
 	gs201_dpu_kick(dpu);
