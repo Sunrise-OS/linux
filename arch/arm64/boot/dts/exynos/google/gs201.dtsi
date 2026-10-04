@@ -203,6 +203,15 @@
 		clock-output-names = "oscclk";
 	};
 
+	cmu_top: clock-controller@1e080000 {
+		compatible = "google,gs201-cmu-top";
+		reg = <0x0 0x1e080000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>;
+		clock-names = "oscclk";
+		status = "disabled";
+	};
+
 	clk_peric0_uart_pclk: clock-2 {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;

@@ -39,6 +39,11 @@
 	};
 };
 
+/* Bring-up: TOP only; leave peripheral consumers on the existing stubs. */
+&cmu_top {
+	status = "okay";
+};
+
 &dpu {
 	status = "okay";
 };
