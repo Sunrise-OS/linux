@@ -610,6 +610,10 @@
 				 <&cmu_disp CLK_GOUT_DISP_DPUB_ACLK_DECON>,
 				 <&cmu_disp CLK_GOUT_DISP_AD_APB_DECON_MAIN_PCLKM>;
 			clock-names = "dma", "dpp", "dpu-apb", "decon", "disp-apb";
+			interrupts = <GIC_SPI 241 IRQ_TYPE_LEVEL_HIGH 0>,
+				     <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH 0>,
+				     <GIC_SPI 239 IRQ_TYPE_LEVEL_HIGH 0>;
+			interrupt-names = "frame_start", "frame_done", "extra";
 			status = "disabled";
 
 			port {
