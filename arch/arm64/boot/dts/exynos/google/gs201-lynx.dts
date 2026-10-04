@@ -8,6 +8,8 @@
 /dts-v1/;
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/regulator/samsung,s2mpg12-regulator.h>
 
 #include "gs201.dtsi"
 
@@ -42,6 +44,69 @@
 };
 
 /* Bring-up: peripherals not listed here keep the bootloader's clock state. */
+&acpm_ipc {
+	pmic-1 {
+		compatible = "samsung,s2mpg12-pmic";
+		interrupts-extended = <&gpa0 6 IRQ_TYPE_LEVEL_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pmic_int>;
+		wakeup-source;
+
+		/*
+		 * Only the rails with a consumer are described; all other
+		 * rails stay as the bootloader left them.
+		 */
+		regulators {
+			/* HSI0 IO rail; the controller hangs without it */
+			s2mpg12_ldo7m: ldo7m {
+				regulator-name = "vdd_hsi";
+				regulator-min-microvolt = <450000>;
+				regulator-max-microvolt = <950000>;
+				regulator-ramp-delay = <6250>;
+				regulator-always-on;
+			};
+
+			/* USB PHY 0.85V (PLL, USB2 DVDD, USBDP VDDA) */
+			s2mpg12_ldo8m: ldo8m {
+				regulator-name = "vdd085_usb";
+				regulator-min-microvolt = <725000>;
+				regulator-max-microvolt = <1300000>;
+				regulator-always-on;
+			};
+
+			/* USB PHY 1.8V (USB2 and USBDP VDDH) */
+			s2mpg12_ldo9m: ldo9m {
+				regulator-name = "vdd18_usb";
+				regulator-min-microvolt = <1600000>;
+				regulator-max-microvolt = <1950000>;
+				regulator-always-on;
+			};
+
+			/* USB PHY 3.0V (USB2 VDD33) */
+			s2mpg12_ldo10m: ldo10m {
+				regulator-name = "vdd33_usb";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3350000>;
+				regulator-always-on;
+			};
+
+			/* Touchscreen DVDD */
+			s2mpg12_ldo25m: ldo25m {
+				regulator-name = "ldo25m_ts_dvdd";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
+
+			/* Touchscreen AVDD */
+			s2mpg12_ldo26m: ldo26m {
+				regulator-name = "ldo26m_ts_avdd";
+				regulator-min-microvolt = <3000000>;
+				regulator-max-microvolt = <3000000>;
+			};
+		};
+	};
+};
+
 &cmu_disp {
 	status = "okay";
 };
@@ -94,6 +159,21 @@
 &spi_0 {
 	cs-gpios = <&gpp20 3 GPIO_ACTIVE_LOW>;
 	status = "okay";
+
+	touchscreen@0 {
+		compatible = "goodix,gt9916";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		interrupt-parent = <&gpa7>;
+		interrupts = <0 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&gpp23 2 GPIO_ACTIVE_LOW>;
+		avdd-supply = <&s2mpg12_ldo26m>;
+		vddio-supply = <&s2mpg12_ldo25m>;
+		pinctrl-0 = <&ts_irq &ts_reset>;
+		pinctrl-names = "default";
+		touchscreen-size-x = <1080>;
+		touchscreen-size-y = <2400>;
+	};
 };
 
 &serial_0 {
