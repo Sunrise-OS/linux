@@ -45,6 +45,18 @@ properties:
       - const: decon
       - const: disp-apb
 
+  interrupts:
+    items:
+      - description: DECON frame start
+      - description: DECON frame done
+      - description: DECON extra events (TE, time-out, resource conflict)
+
+  interrupt-names:
+    items:
+      - const: frame_start
+      - const: frame_done
+      - const: extra
+
   port:
     $ref: /schemas/graph.yaml#/properties/port
     description: Output to the DSI host.
@@ -55,6 +67,8 @@ required:
   - reg-names
   - clocks
   - clock-names
+  - interrupts
+  - interrupt-names
   - port
 
 additionalProperties: false
@@ -62,6 +76,7 @@ additionalProperties: false
 examples:
   - |
     #include <dt-bindings/clock/google,gs201.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
 
     display-controller@1c240000 {
         compatible = "google,gs201-dpu";
@@ -73,6 +88,10 @@ examples:
                  <&cmu_disp CLK_GOUT_DISP_DPUB_ACLK_DECON>,
                  <&cmu_disp CLK_GOUT_DISP_AD_APB_DECON_MAIN_PCLKM>;
         clock-names = "dma", "dpp", "dpu-apb", "decon", "disp-apb";
+        interrupts = <GIC_SPI 241 IRQ_TYPE_LEVEL_HIGH 0>,
+                     <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH 0>,
+                     <GIC_SPI 239 IRQ_TYPE_LEVEL_HIGH 0>;
+        interrupt-names = "frame_start", "frame_done", "extra";
 
         port {
             endpoint {
