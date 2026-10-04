@@ -40,6 +40,22 @@
 };
 
 /* Bring-up: register providers; keep peripheral consumers on existing stubs. */
+&cmu_disp {
+	status = "okay";
+};
+
+&cmu_dpu {
+	status = "okay";
+};
+
+&cmu_hsi0 {
+	status = "okay";
+};
+
+&cmu_hsi2 {
+	status = "okay";
+};
+
 &cmu_misc {
 	status = "okay";
 };

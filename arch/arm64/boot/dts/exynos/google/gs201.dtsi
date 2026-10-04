@@ -237,6 +237,38 @@
 		status = "disabled";
 	};
 
+	/* Keep these domains powered until genpd and CMU PM support exist. */
+	cmu_hsi2: clock-controller@14400000 {
+		compatible = "google,gs201-cmu-hsi2";
+		reg = <0x0 0x14400000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>,
+			 <&cmu_top CLK_GOUT_CMU_HSI2_NOC>,
+			 <&cmu_top CLK_GOUT_CMU_HSI2_PCIE>,
+			 <&cmu_top CLK_GOUT_CMU_HSI2_UFS_EMBD>,
+			 <&cmu_top CLK_GOUT_CMU_HSI2_MMCCARD>;
+		clock-names = "oscclk", "bus", "pcie", "ufs", "mmc";
+		status = "disabled";
+	};
+
+	cmu_dpu: clock-controller@1c000000 {
+		compatible = "google,gs201-cmu-dpu";
+		reg = <0x0 0x1c000000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>, <&cmu_top CLK_GOUT_CMU_DPU_NOC>;
+		clock-names = "oscclk", "bus";
+		status = "disabled";
+	};
+
+	cmu_disp: clock-controller@1c200000 {
+		compatible = "google,gs201-cmu-disp";
+		reg = <0x0 0x1c200000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>, <&cmu_top CLK_GOUT_CMU_DISP_NOC>;
+		clock-names = "oscclk", "bus";
+		status = "disabled";
+	};
+
 	cmu_top: clock-controller@1e080000 {
 		compatible = "google,gs201-cmu-top";
 		reg = <0x0 0x1e080000 0x8000>;
