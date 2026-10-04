@@ -15,6 +15,7 @@
  * Copyright 2020-2026 Google LLC
  */
 
+#include <dt-bindings/clock/google,gs101-acpm.h>
 #include <dt-bindings/clock/google,gs201.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -477,6 +478,64 @@
 		};
 	};
 
+	/*
+	 * GPU power domains. The embedded (shader core) domain sits below
+	 * the G3D top domain, whose TZPC state is saved by the secure
+	 * monitor around a power cycle.
+	 */
+	pd_g3d: power-domain@27f00800 {
+		compatible = "google,gs201-power-domain";
+		reg = <0x0 0x27f00800 0x4>;
+		#power-domain-cells = <0>;
+		google,pmu-syscon = <&pmu_system_controller>;
+		google,pmu-offset = <0x1e00>;
+		google,tzpc-smc = <0x27f10204>;
+	};
+
+	pd_embedded_g3d: power-domain-embedded-g3d {
+		compatible = "google,gs201-power-domain";
+		#power-domain-cells = <0>;
+		power-domains = <&pd_g3d>;
+		google,pmu-syscon = <&pmu_system_controller>;
+		google,pmu-offset = <0x2000>;
+	};
+
+	/*
+	 * Core (L2/top) rates of the GPU DVFS table; the firmware owns the
+	 * voltage so there are no supplies here. 151 MHz is the idle rate.
+	 */
+	gpu_opp_table: opp-table-gpu {
+		compatible = "operating-points-v2";
+
+		opp-151000000 {
+			opp-hz = /bits/ 64 <151000000>;
+		};
+
+		opp-302000000 {
+			opp-hz = /bits/ 64 <302000000>;
+		};
+
+		opp-470000000 {
+			opp-hz = /bits/ 64 <470000000>;
+		};
+
+		opp-603000000 {
+			opp-hz = /bits/ 64 <603000000>;
+		};
+
+		opp-750000000 {
+			opp-hz = /bits/ 64 <750000000>;
+		};
+
+		opp-885000000 {
+			opp-hz = /bits/ 64 <885000000>;
+		};
+
+		opp-996000000 {
+			opp-hz = /bits/ 64 <996000000>;
+		};
+	};
+
 	soc: soc@0 {
 		compatible = "simple-bus";
 		#address-cells = <1>;
@@ -810,6 +869,23 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges = <0x0 0x18500000 0x48000>;
+		};
+
+		/* Mali-G710: the rates come from the ACPM DVFS domains */
+		gpu: gpu@28000000 {
+			compatible = "google,gs201-mali", "arm,mali-valhall-csf";
+			reg = <0x28000000 0x480000>;
+			interrupts = <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH 0>,
+				     <GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH 0>,
+				     <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH 0>;
+			interrupt-names = "job", "mmu", "gpu";
+			clocks = <&acpm_ipc GS101_CLK_ACPM_DVFS_G3DL2>,
+				 <&acpm_ipc GS101_CLK_ACPM_DVFS_G3D>;
+			clock-names = "core", "stacks";
+			power-domains = <&pd_embedded_g3d>;
+			operating-points-v2 = <&gpu_opp_table>;
+
+			status = "disabled";
 		};
 
 		pmu_system_controller: system-controller@18060000 {
