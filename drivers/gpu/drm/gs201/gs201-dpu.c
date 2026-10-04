@@ -62,9 +62,11 @@
 #define DECON_TRIG_SW_DET_EN		BIT(1)
 #define DECON_TRIG_HW_EN		BIT(0)
 #define DECON_INT_EN			0x60
+#define DECON_INT_EN_FRAME_START	BIT(12)
 #define DECON_INT_EN_FRAME_DONE		BIT(13)
 #define DECON_INT_EN_GLOBAL		BIT(0)
 #define DECON_INT_PEND			0x70
+#define DECON_INT_PEND_FRAME_START	BIT(12)
 #define DECON_INT_PEND_FRAME_DONE	BIT(13)
 #define DECON_SHD_REG_UP_REQ		0x50
 #define DECON_SHD_REG_UP_REQ_ALL	(BIT(31) | 0x3f)
@@ -92,6 +94,8 @@ struct gs201_dpu {
 	struct delayed_work timeout_work;
 	struct drm_pending_vblank_event *event;
 	bool busy;
+	bool started;
+	bool sw_fallback;
 	bool kick_pending;
 	u32 next_addr;
 	u32 next_pitch;
@@ -112,6 +116,29 @@ static void dpp_write(struct gs201_dpu *dpu, unsigned int reg, u32 val)
 
 	writel(val, base + reg);
 	writel(val, base + reg + DPP_SHADOW);
+}
+
+/*
+ * One-shot hardware trigger, as the vendor driver does it: unmask the
+ * trigger after the shadow update and DECON sends exactly one frame on the
+ * next TE edge, which keeps the transfer in step with the panel's own scan.
+ * The bootloader leaves the trigger unmasked, which makes DECON free-run a
+ * frame on every TE edge.
+ */
+static void gs201_dpu_trigger_mask(struct gs201_dpu *dpu)
+{
+	u32 v = readl(dpu->decon + DECON_TRIG_CON);
+
+	v &= ~(DECON_TRIG_HW_EN | DECON_TRIG_SW_EN | DECON_TRIG_SW_DET_EN);
+	writel(v | DECON_TRIG_HW_MASK, dpu->decon + DECON_TRIG_CON);
+}
+
+static void gs201_dpu_trigger_unmask(struct gs201_dpu *dpu)
+{
+	u32 v = readl(dpu->decon + DECON_TRIG_CON);
+
+	v &= ~(DECON_TRIG_HW_MASK | DECON_TRIG_SW_EN | DECON_TRIG_SW_DET_EN);
+	writel(v | DECON_TRIG_HW_EN, dpu->decon + DECON_TRIG_CON);
 }
 
 /* Program the next framebuffer, latch the shadow registers and refresh. */
@@ -141,13 +168,12 @@ static void gs201_dpu_kick(struct gs201_dpu *dpu)
 	writel(v & ~DECON_TRIG_HW_MASK, dpu->decon + DECON_TRIG_CON_SECURE);
 
 	dpu->busy = true;
+	dpu->started = false;
+	dpu->sw_fallback = false;
 	dpu->kick_pending = false;
 	schedule_delayed_work(&dpu->timeout_work, msecs_to_jiffies(100));
 
-	v = readl(dpu->decon + DECON_TRIG_CON);
-	writel((v & ~DECON_TRIG_HW_MASK) | DECON_TRIG_SW_EN |
-	       DECON_TRIG_SW_DET_EN | DECON_TRIG_HW_EN,
-	       dpu->decon + DECON_TRIG_CON);
+	gs201_dpu_trigger_unmask(dpu);
 }
 
 /* The panel has the frame: complete the flip and start a queued one. */
@@ -175,13 +201,19 @@ static irqreturn_t gs201_dpu_irq(int irq, void *data)
 	struct gs201_dpu *dpu = data;
 	u32 pend = readl(dpu->decon + DECON_INT_PEND);
 
-	if (!(pend & DECON_INT_PEND_FRAME_DONE))
+	pend &= DECON_INT_PEND_FRAME_START | DECON_INT_PEND_FRAME_DONE;
+	if (!pend)
 		return IRQ_NONE;
 
-	writel(DECON_INT_PEND_FRAME_DONE, dpu->decon + DECON_INT_PEND);
+	writel(pend, dpu->decon + DECON_INT_PEND);
 
 	spin_lock(&dpu->lock);
-	if (dpu->busy) {
+	if (pend & DECON_INT_PEND_FRAME_START) {
+		/* One frame per kick: stop DECON from sending another. */
+		gs201_dpu_trigger_mask(dpu);
+		dpu->started = true;
+	}
+	if ((pend & DECON_INT_PEND_FRAME_DONE) && dpu->busy) {
 		cancel_delayed_work(&dpu->timeout_work);
 		gs201_dpu_frame_done_locked(dpu);
 	}
@@ -197,8 +229,19 @@ static void gs201_dpu_timeout_work(struct work_struct *work)
 					     struct gs201_dpu, timeout_work);
 
 	spin_lock_irq(&dpu->lock);
-	if (dpu->busy) {
+	if (dpu->busy && !dpu->started && !dpu->sw_fallback) {
+		/* No TE edge arrived: push the frame out with a SW trigger. */
+		u32 v = readl(dpu->decon + DECON_TRIG_CON);
+
+		dev_warn_ratelimited(dpu->drm.dev, "no TE, SW trigger\n");
+		dpu->sw_fallback = true;
+		writel(v | DECON_TRIG_SW_EN | DECON_TRIG_SW_DET_EN,
+		       dpu->decon + DECON_TRIG_CON);
+		schedule_delayed_work(&dpu->timeout_work,
+				      msecs_to_jiffies(100));
+	} else if (dpu->busy) {
 		dev_warn_ratelimited(dpu->drm.dev, "frame done timeout\n");
+		gs201_dpu_trigger_mask(dpu);
 		gs201_dpu_frame_done_locked(dpu);
 	}
 	spin_unlock_irq(&dpu->lock);
@@ -213,9 +256,14 @@ static void gs201_dpu_enable(struct drm_simple_display_pipe *pipe,
 	dpp_write(dpu, DPP_IMG_SIZE,
 		  (GS201_DPU_HEIGHT << 16) | GS201_DPU_WIDTH);
 
-	writel(DECON_INT_PEND_FRAME_DONE, dpu->decon + DECON_INT_PEND);
+	/* Stop the bootloader's free-running trigger; kick() sends frames. */
+	gs201_dpu_trigger_mask(dpu);
+
+	writel(DECON_INT_PEND_FRAME_START | DECON_INT_PEND_FRAME_DONE,
+	       dpu->decon + DECON_INT_PEND);
 	writel(readl(dpu->decon + DECON_INT_EN) |
-	       DECON_INT_EN_FRAME_DONE | DECON_INT_EN_GLOBAL,
+	       DECON_INT_EN_FRAME_START | DECON_INT_EN_FRAME_DONE |
+	       DECON_INT_EN_GLOBAL,
 	       dpu->decon + DECON_INT_EN);
 }
 
