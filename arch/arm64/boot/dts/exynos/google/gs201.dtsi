@@ -237,6 +237,19 @@
 		status = "disabled";
 	};
 
+	cmu_hsi0: clock-controller@11000000 {
+		compatible = "google,gs201-cmu-hsi0";
+		reg = <0x0 0x11000000 0x8000>;
+		#clock-cells = <1>;
+		clocks = <&ext_24_5m>,
+			 <&cmu_top CLK_GOUT_CMU_HSI0_NOC>,
+			 <&cmu_top CLK_GOUT_CMU_HSI0_DPGTC>,
+			 <&cmu_top CLK_GOUT_CMU_HSI0_USB31DRD>,
+			 <&cmu_top CLK_GOUT_CMU_HSI0_USBDPDBG>;
+		clock-names = "oscclk", "bus", "dpgtc", "usb31drd", "usbdpdbg";
+		status = "disabled";
+	};
+
 	/* Keep these domains powered until genpd and CMU PM support exist. */
 	cmu_hsi2: clock-controller@14400000 {
 		compatible = "google,gs201-cmu-hsi2";
