@@ -39,7 +39,7 @@
 	};
 };
 
-/* Bring-up: register providers; keep peripheral consumers on existing stubs. */
+/* Bring-up: peripherals not listed here keep the bootloader's clock state. */
 &cmu_disp {
 	status = "okay";
 };
