@@ -10,6 +10,7 @@
  */
 
 #include <linux/bits.h>
+#include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
@@ -172,6 +173,7 @@ static int gs201_dsim_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct gs201_dsim *dsim;
+	struct clk *bus;
 
 	dsim = devm_drm_bridge_alloc(dev, struct gs201_dsim, bridge,
 				     &gs201_dsim_bridge_funcs);
@@ -179,6 +181,11 @@ static int gs201_dsim_probe(struct platform_device *pdev)
 		return PTR_ERR(dsim);
 	dsim->dev = dev;
 	mutex_init(&dsim->cmd_lock);
+
+	bus = devm_clk_get_enabled(dev, "bus");
+	if (IS_ERR(bus))
+		return dev_err_probe(dev, PTR_ERR(bus),
+				     "failed to enable bus clock\n");
 
 	dsim->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(dsim->regs))

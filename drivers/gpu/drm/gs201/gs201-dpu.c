@@ -11,6 +11,7 @@
  */
 
 #include <linux/bits.h>
+#include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
@@ -61,10 +62,15 @@
 #define DECON_SHD_REG_UP_REQ		0x50
 #define DECON_SHD_REG_UP_REQ_ALL	(BIT(31) | 0x3f)
 
+static const char *const gs201_dpu_clk_names[] = {
+	"dma", "dpp", "dpu-apb", "decon", "disp-apb",
+};
+
 struct gs201_dpu {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
 	struct drm_connector connector;
+	struct clk_bulk_data clks[ARRAY_SIZE(gs201_dpu_clk_names)];
 	void __iomem *decon;
 	void __iomem *dpp;
 	unsigned int ch;
@@ -212,18 +218,39 @@ static int gs201_dpu_find_channel(struct gs201_dpu *dpu)
 	return -ENODEV;
 }
 
+static void gs201_dpu_clks_disable(void *data)
+{
+	struct gs201_dpu *dpu = data;
+
+	clk_bulk_disable_unprepare(ARRAY_SIZE(dpu->clks), dpu->clks);
+}
+
 static int gs201_dpu_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct gs201_dpu *dpu;
 	struct device_node *endpoint;
 	struct drm_device *drm;
-	int ret;
+	int ret, i;
 
 	dpu = devm_drm_dev_alloc(dev, &gs201_dpu_driver, struct gs201_dpu, drm);
 	if (IS_ERR(dpu))
 		return PTR_ERR(dpu);
 	drm = &dpu->drm;
+
+	for (i = 0; i < ARRAY_SIZE(dpu->clks); i++)
+		dpu->clks[i].id = gs201_dpu_clk_names[i];
+	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(dpu->clks), dpu->clks);
+	if (ret)
+		return dev_err_probe(dev, ret, "failed to get clocks\n");
+
+	ret = clk_bulk_prepare_enable(ARRAY_SIZE(dpu->clks), dpu->clks);
+	if (ret)
+		return dev_err_probe(dev, ret, "failed to enable clocks\n");
+
+	ret = devm_add_action_or_reset(dev, gs201_dpu_clks_disable, dpu);
+	if (ret)
+		return ret;
 
 	dpu->decon = devm_platform_ioremap_resource_byname(pdev, "decon");
 	if (IS_ERR(dpu->decon))
