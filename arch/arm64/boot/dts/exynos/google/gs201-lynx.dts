@@ -43,6 +43,31 @@
 	status = "okay";
 };
 
+&usbdrd31 {
+	vdd10-supply = <&s2mpg12_ldo7m>;
+	vdd33-supply = <&s2mpg12_ldo10m>;
+
+	status = "okay";
+};
+
+&usbdrd31_dwc3 {
+	dr_mode = "peripheral";
+	maximum-speed = "high-speed";
+
+	status = "okay";
+};
+
+&usbdrd31_phy {
+	pll-supply = <&s2mpg12_ldo8m>;
+	dvdd-usb20-supply = <&s2mpg12_ldo8m>;
+	vddh-usb20-supply = <&s2mpg12_ldo9m>;
+	vdd33-usb20-supply = <&s2mpg12_ldo10m>;
+	vdda-usbdp-supply = <&s2mpg12_ldo8m>;
+	vddh-usbdp-supply = <&s2mpg12_ldo9m>;
+
+	status = "okay";
+};
+
 &watchdog_cl0 {
 	status = "okay";
 };
