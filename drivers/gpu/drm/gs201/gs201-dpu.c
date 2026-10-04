@@ -12,6 +12,7 @@
 
 #include <linux/bits.h>
 #include <linux/clk.h>
+#include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
@@ -33,6 +34,7 @@
 #include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_modes.h>
+#include <drm/drm_vblank.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 
@@ -59,6 +61,11 @@
 #define DECON_TRIG_SW_EN		BIT(8)
 #define DECON_TRIG_SW_DET_EN		BIT(1)
 #define DECON_TRIG_HW_EN		BIT(0)
+#define DECON_INT_EN			0x60
+#define DECON_INT_EN_FRAME_DONE		BIT(13)
+#define DECON_INT_EN_GLOBAL		BIT(0)
+#define DECON_INT_PEND			0x70
+#define DECON_INT_PEND_FRAME_DONE	BIT(13)
 #define DECON_SHD_REG_UP_REQ		0x50
 #define DECON_SHD_REG_UP_REQ_ALL	(BIT(31) | 0x3f)
 
@@ -74,6 +81,21 @@ struct gs201_dpu {
 	void __iomem *decon;
 	void __iomem *dpp;
 	unsigned int ch;
+
+	/*
+	 * The command-mode panel only refreshes when DECON is triggered. At
+	 * most one frame is in flight; a commit that arrives meanwhile is
+	 * remembered and sent once the frame-done interrupt fires. The flip
+	 * event of the commit is completed by that interrupt too.
+	 */
+	spinlock_t lock;
+	struct delayed_work timeout_work;
+	struct drm_pending_vblank_event *event;
+	bool busy;
+	bool kick_pending;
+	u32 next_addr;
+	u32 next_pitch;
+	u32 next_height;
 };
 
 #define to_dpu(d) container_of(d, struct gs201_dpu, drm)
@@ -92,11 +114,19 @@ static void dpp_write(struct gs201_dpu *dpu, unsigned int reg, u32 val)
 	writel(val, base + reg + DPP_SHADOW);
 }
 
-/* Latch the shadow registers and make the command-mode panel refresh. */
+/* Program the next framebuffer, latch the shadow registers and refresh. */
 static void gs201_dpu_kick(struct gs201_dpu *dpu)
 {
 	void __iomem *dpp = dpu->dpp + dpu->ch * DPP_CH_STRIDE;
 	u32 v;
+
+	/*
+	 * SRC_SIZE is the frame size as laid out in memory; linear RGB has no
+	 * stride register, so a padded pitch is expressed as a wider frame.
+	 */
+	dpp_write(dpu, DPP_SRC_SIZE,
+		  (dpu->next_height << 16) | (dpu->next_pitch / 4));
+	dpp_write(dpu, DPP_BASEADDR_Y8, dpu->next_addr);
 
 	v = readl(dpu->decon + DECON_GLOBAL_CON);
 	if (!(v & DECON_GLOBAL_CON_EN_F))
@@ -110,10 +140,68 @@ static void gs201_dpu_kick(struct gs201_dpu *dpu)
 	v = readl(dpu->decon + DECON_TRIG_CON_SECURE);
 	writel(v & ~DECON_TRIG_HW_MASK, dpu->decon + DECON_TRIG_CON_SECURE);
 
+	dpu->busy = true;
+	dpu->kick_pending = false;
+	schedule_delayed_work(&dpu->timeout_work, msecs_to_jiffies(100));
+
 	v = readl(dpu->decon + DECON_TRIG_CON);
 	writel((v & ~DECON_TRIG_HW_MASK) | DECON_TRIG_SW_EN |
 	       DECON_TRIG_SW_DET_EN | DECON_TRIG_HW_EN,
 	       dpu->decon + DECON_TRIG_CON);
+}
+
+/* The panel has the frame: complete the flip and start a queued one. */
+static void gs201_dpu_frame_done_locked(struct gs201_dpu *dpu)
+{
+	struct drm_crtc *crtc = &dpu->pipe.crtc;
+
+	dpu->busy = false;
+
+	if (dpu->event) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&crtc->dev->event_lock, flags);
+		drm_crtc_send_vblank_event(crtc, dpu->event);
+		spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
+		dpu->event = NULL;
+	}
+
+	if (dpu->kick_pending)
+		gs201_dpu_kick(dpu);
+}
+
+static irqreturn_t gs201_dpu_irq(int irq, void *data)
+{
+	struct gs201_dpu *dpu = data;
+	u32 pend = readl(dpu->decon + DECON_INT_PEND);
+
+	if (!(pend & DECON_INT_PEND_FRAME_DONE))
+		return IRQ_NONE;
+
+	writel(DECON_INT_PEND_FRAME_DONE, dpu->decon + DECON_INT_PEND);
+
+	spin_lock(&dpu->lock);
+	if (dpu->busy) {
+		cancel_delayed_work(&dpu->timeout_work);
+		gs201_dpu_frame_done_locked(dpu);
+	}
+	spin_unlock(&dpu->lock);
+
+	return IRQ_HANDLED;
+}
+
+/* Never let a missed interrupt stall the compositor. */
+static void gs201_dpu_timeout_work(struct work_struct *work)
+{
+	struct gs201_dpu *dpu = container_of(to_delayed_work(work),
+					     struct gs201_dpu, timeout_work);
+
+	spin_lock_irq(&dpu->lock);
+	if (dpu->busy) {
+		dev_warn_ratelimited(dpu->drm.dev, "frame done timeout\n");
+		gs201_dpu_frame_done_locked(dpu);
+	}
+	spin_unlock_irq(&dpu->lock);
 }
 
 static void gs201_dpu_enable(struct drm_simple_display_pipe *pipe,
@@ -124,11 +212,26 @@ static void gs201_dpu_enable(struct drm_simple_display_pipe *pipe,
 
 	dpp_write(dpu, DPP_IMG_SIZE,
 		  (GS201_DPU_HEIGHT << 16) | GS201_DPU_WIDTH);
+
+	writel(DECON_INT_PEND_FRAME_DONE, dpu->decon + DECON_INT_PEND);
+	writel(readl(dpu->decon + DECON_INT_EN) |
+	       DECON_INT_EN_FRAME_DONE | DECON_INT_EN_GLOBAL,
+	       dpu->decon + DECON_INT_EN);
 }
 
 static void gs201_dpu_disable(struct drm_simple_display_pipe *pipe)
 {
+	struct gs201_dpu *dpu = to_dpu(pipe->crtc.dev);
+
 	/* The panel stays powered; nothing to do until DSIM/panel are owned. */
+	writel(readl(dpu->decon + DECON_INT_EN) & ~DECON_INT_EN_FRAME_DONE,
+	       dpu->decon + DECON_INT_EN);
+	cancel_delayed_work_sync(&dpu->timeout_work);
+
+	spin_lock_irq(&dpu->lock);
+	gs201_dpu_frame_done_locked(dpu);
+	dpu->kick_pending = false;
+	spin_unlock_irq(&dpu->lock);
 }
 
 static void gs201_dpu_update(struct drm_simple_display_pipe *pipe,
@@ -136,19 +239,39 @@ static void gs201_dpu_update(struct drm_simple_display_pipe *pipe,
 {
 	struct gs201_dpu *dpu = to_dpu(pipe->crtc.dev);
 	struct drm_plane_state *state = pipe->plane.state;
+	struct drm_crtc *crtc = &pipe->crtc;
+	struct drm_pending_vblank_event *event;
 
 	if (!state->fb)
 		return;
 
-	/*
-	 * SRC_SIZE is the frame size as laid out in memory; linear RGB has no
-	 * stride register, so a padded pitch is expressed as a wider frame.
-	 */
-	dpp_write(dpu, DPP_SRC_SIZE,
-		  (state->fb->height << 16) | (state->fb->pitches[0] / 4));
-	dpp_write(dpu, DPP_BASEADDR_Y8,
-		  lower_32_bits(drm_fb_dma_get_gem_addr(state->fb, state, 0)));
-	gs201_dpu_kick(dpu);
+	spin_lock_irq(&dpu->lock);
+
+	/* Take over the flip event: it completes on frame done, not at once. */
+	event = crtc->state->event;
+	if (event) {
+		crtc->state->event = NULL;
+		if (dpu->event) {
+			unsigned long flags;
+
+			spin_lock_irqsave(&crtc->dev->event_lock, flags);
+			drm_crtc_send_vblank_event(crtc, dpu->event);
+			spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
+		}
+		dpu->event = event;
+	}
+
+	dpu->next_addr =
+		lower_32_bits(drm_fb_dma_get_gem_addr(state->fb, state, 0));
+	dpu->next_pitch = state->fb->pitches[0];
+	dpu->next_height = state->fb->height;
+
+	if (dpu->busy)
+		dpu->kick_pending = true;
+	else
+		gs201_dpu_kick(dpu);
+
+	spin_unlock_irq(&dpu->lock);
 }
 
 static const struct drm_simple_display_pipe_funcs gs201_dpu_pipe_funcs = {
@@ -235,12 +358,15 @@ static int gs201_dpu_probe(struct platform_device *pdev)
 	struct gs201_dpu *dpu;
 	struct device_node *endpoint;
 	struct drm_device *drm;
-	int ret, i;
+	int ret, i, irq;
 
 	dpu = devm_drm_dev_alloc(dev, &gs201_dpu_driver, struct gs201_dpu, drm);
 	if (IS_ERR(dpu))
 		return PTR_ERR(dpu);
 	drm = &dpu->drm;
+
+	spin_lock_init(&dpu->lock);
+	INIT_DELAYED_WORK(&dpu->timeout_work, gs201_dpu_timeout_work);
 
 	for (i = 0; i < ARRAY_SIZE(dpu->clks); i++)
 		dpu->clks[i].id = gs201_dpu_clk_names[i];
@@ -321,6 +447,14 @@ static int gs201_dpu_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 	}
+
+	irq = platform_get_irq_byname(pdev, "frame_done");
+	if (irq < 0)
+		return irq;
+	ret = devm_request_irq(dev, irq, gs201_dpu_irq, 0, dev_name(dev), dpu);
+	if (ret)
+		return dev_err_probe(dev, ret,
+				     "failed to request frame_done irq\n");
 
 	drm_plane_enable_fb_damage_clips(&dpu->pipe.plane);
 	drm_mode_config_reset(drm);
