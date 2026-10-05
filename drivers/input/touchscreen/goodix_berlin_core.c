@@ -436,8 +436,7 @@ static int goodix_berlin_get_remaining_contacts(struct goodix_berlin_core *cd,
 	u32 addr = cd->touch_data_addr + GOODIX_BERLIN_HEADER_SIZE + offset;
 	int error;
 
-	error = regmap_raw_read(cd->regmap, addr,
-				&cd->event.data[offset],
+	error = regmap_raw_read(cd->regmap, addr, &cd->event.data[offset],
 				(n - 2) * cd->point_len);
 	if (error) {
 		dev_err_ratelimited(cd->dev, "failed to get touch data, %d\n",
@@ -505,8 +504,8 @@ static void goodix_berlin_touch_handler(struct goodix_berlin_core *cd)
 	}
 
 	if (touch_num) {
-		int len = touch_num * cd->point_len +
-			  GOODIX_BERLIN_CHECKSUM_SIZE;
+		int len =
+			touch_num * cd->point_len + GOODIX_BERLIN_CHECKSUM_SIZE;
 		if (!goodix_berlin_checksum_valid(cd->event.data, len)) {
 			dev_err(cd->dev, "touch data checksum error: %*ph\n",
 				len, cd->event.data);
@@ -568,10 +567,8 @@ static irqreturn_t goodix_berlin_irq(int irq, void *data)
 	 * - bytes 26-31: Finger 2 Bytes 2-7
 	 * - bytes 32-33: Checksum
 	 */
-	error = regmap_raw_read(cd->regmap, cd->touch_data_addr,
-				&cd->event,
-				GOODIX_BERLIN_HEADER_SIZE +
-					2 * cd->point_len +
+	error = regmap_raw_read(cd->regmap, cd->touch_data_addr, &cd->event,
+				GOODIX_BERLIN_HEADER_SIZE + 2 * cd->point_len +
 					GOODIX_BERLIN_CHECKSUM_SIZE);
 	if (error) {
 		dev_warn_ratelimited(cd->dev,

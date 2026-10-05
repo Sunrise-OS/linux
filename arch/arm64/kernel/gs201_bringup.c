@@ -24,6 +24,11 @@
 #include <asm/fixmap.h>
 #include <asm/memory.h>
 #include <asm/sections.h>
+#include <linux/of.h>
+#include <linux/panic_notifier.h>
+#include <linux/reboot.h>
+#include <linux/regmap.h>
+#include <linux/soc/samsung/exynos-pmu.h>
 
 /* ---- ramoops console zone (see fs/pstore/ram_core.c) ---- */
 #define RC_BASE 0xfd3ff000UL /* ramoops_mem in ABL's DT */
@@ -100,6 +105,49 @@ void gs201_report_reset_reason(u32 val)
 	writel(val, (void __iomem *)__fix_to_virt(FIX_GS201_RAMCON) +
 			    (pa & ~PAGE_MASK));
 }
+
+/*
+ * On panic, ask ABL for fastboot (PMU SYSIP_DAT0 = 0xfc, as reboot-mode
+ * "bootloader" does) with a normal-reboot signature and a warm reset, so the
+ * ramoops log of the failed boot survives and no Android boot overwrites it.
+ */
+#define PMU_SYSIP_DAT0 0x0810
+#define SYSIP_MODE_BOOTLOADER 0xfc
+
+static struct regmap *gs201_pmu;
+
+static int gs201_panic_to_fastboot(struct notifier_block *nb,
+				   unsigned long event, void *unused)
+{
+	/* PMU regmap: raw spinlock + SMC writes, safe in panic context */
+	if (gs201_pmu)
+		regmap_write(gs201_pmu, PMU_SYSIP_DAT0, SYSIP_MODE_BOOTLOADER);
+	gs201_report_reset_reason(DSS_SIGN_PANIC);
+	reboot_mode = REBOOT_WARM;
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block gs201_panic_nb = {
+	.notifier_call = gs201_panic_to_fastboot,
+	.priority = INT_MAX,
+};
+
+static int __init gs201_panic_hook_init(void)
+{
+	struct regmap *pmu;
+
+	if (!of_machine_is_compatible("google,gs201"))
+		return 0;
+	pmu = exynos_get_pmu_regmap();
+	if (IS_ERR(pmu))
+		pr_warn("gs201: no PMU regmap (%pe), panic will not enter fastboot\n",
+			pmu);
+	else
+		gs201_pmu = pmu;
+	atomic_notifier_chain_register(&panic_notifier_list, &gs201_panic_nb);
+	return 0;
+}
+late_initcall_sync(gs201_panic_hook_init);
 
 /* ---- builtin devicetree with bootloader fixups ---- */
 extern const u8 gs201_bringup_dtb[];

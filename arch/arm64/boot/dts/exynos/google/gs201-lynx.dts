@@ -41,6 +41,11 @@
 			no-map;
 		};
 	};
+
+	reg_placeholder: regulator-0 {
+		compatible = "regulator-fixed";
+		regulator-name = "placeholder";
+	};
 };
 
 /* Bring-up: peripherals not listed here keep the bootloader's clock state. */
@@ -57,39 +62,6 @@
 		 * rails stay as the bootloader left them.
 		 */
 		regulators {
-			/* HSI0 IO rail; the controller hangs without it */
-			s2mpg12_ldo7m: ldo7m {
-				regulator-name = "vdd_hsi";
-				regulator-min-microvolt = <450000>;
-				regulator-max-microvolt = <950000>;
-				regulator-ramp-delay = <6250>;
-				regulator-always-on;
-			};
-
-			/* USB PHY 0.85V (PLL, USB2 DVDD, USBDP VDDA) */
-			s2mpg12_ldo8m: ldo8m {
-				regulator-name = "vdd085_usb";
-				regulator-min-microvolt = <725000>;
-				regulator-max-microvolt = <1300000>;
-				regulator-always-on;
-			};
-
-			/* USB PHY 1.8V (USB2 and USBDP VDDH) */
-			s2mpg12_ldo9m: ldo9m {
-				regulator-name = "vdd18_usb";
-				regulator-min-microvolt = <1600000>;
-				regulator-max-microvolt = <1950000>;
-				regulator-always-on;
-			};
-
-			/* USB PHY 3.0V (USB2 VDD33) */
-			s2mpg12_ldo10m: ldo10m {
-				regulator-name = "vdd33_usb";
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <3350000>;
-				regulator-always-on;
-			};
-
 			/* Touchscreen DVDD */
 			s2mpg12_ldo25m: ldo25m {
 				regulator-name = "ldo25m_ts_dvdd";
@@ -185,8 +157,9 @@
 };
 
 &usbdrd31 {
-	vdd10-supply = <&s2mpg12_ldo7m>;
-	vdd33-supply = <&s2mpg12_ldo10m>;
+	/* TODO: the rails are left on by the bootloader; describe the LDOs */
+	vdd10-supply = <&reg_placeholder>;
+	vdd33-supply = <&reg_placeholder>;
 
 	status = "okay";
 };
@@ -199,12 +172,12 @@
 };
 
 &usbdrd31_phy {
-	pll-supply = <&s2mpg12_ldo8m>;
-	dvdd-usb20-supply = <&s2mpg12_ldo8m>;
-	vddh-usb20-supply = <&s2mpg12_ldo9m>;
-	vdd33-usb20-supply = <&s2mpg12_ldo10m>;
-	vdda-usbdp-supply = <&s2mpg12_ldo8m>;
-	vddh-usbdp-supply = <&s2mpg12_ldo9m>;
+	pll-supply = <&reg_placeholder>;
+	dvdd-usb20-supply = <&reg_placeholder>;
+	vddh-usb20-supply = <&reg_placeholder>;
+	vdd33-usb20-supply = <&reg_placeholder>;
+	vdda-usbdp-supply = <&reg_placeholder>;
+	vddh-usbdp-supply = <&reg_placeholder>;
 
 	status = "okay";
 };
@@ -223,12 +196,4 @@
 
 &ufs_0_phy {
 	status = "okay";
-};
-
-/* TEMP-DEBUG T1: glue enabled, child without ref clock / phys */
-&usbdrd31_dwc3 {
-	/delete-property/ clocks;
-	/delete-property/ clock-names;
-	/delete-property/ phys;
-	/delete-property/ phy-names;
 };

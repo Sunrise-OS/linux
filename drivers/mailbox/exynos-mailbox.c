@@ -128,18 +128,10 @@ static struct mbox_chan *exynos_mbox_of_xlate(struct mbox_controller *mbox,
 }
 
 static const struct of_device_id exynos_mbox_match[] = {
-	{
-		.compatible = "google,gs101-mbox",
-		.data = &exynos_gs101_mbox_data
-	},
-	{
-		.compatible = "google,gs201-mbox",
-		.data = &exynos_gs101_mbox_data
-	},
-	{
-		.compatible = "samsung,exynos850-mbox",
-		.data = &exynos850_mbox_data
-	},
+	{ .compatible = "google,gs101-mbox", .data = &exynos_gs101_mbox_data },
+	{ .compatible = "google,gs201-mbox", .data = &exynos_gs101_mbox_data },
+	{ .compatible = "samsung,exynos850-mbox",
+	  .data = &exynos850_mbox_data },
 	{},
 };
 MODULE_DEVICE_TABLE(of, exynos_mbox_match);

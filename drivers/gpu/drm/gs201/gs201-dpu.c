@@ -52,24 +52,24 @@
 #define DPP_BASEADDR_Y8 0x40
 
 /* DECON */
-#define DECON_GLOBAL_CON		0x20
-#define DECON_GLOBAL_CON_EN		BIT(0)
-#define DECON_GLOBAL_CON_EN_F		BIT(1)
-#define DECON_TRIG_CON			0x30
-#define DECON_TRIG_CON_SECURE		0x3c
-#define DECON_TRIG_HW_MASK		BIT(4)
-#define DECON_TRIG_SW_EN		BIT(8)
-#define DECON_TRIG_SW_DET_EN		BIT(1)
-#define DECON_TRIG_HW_EN		BIT(0)
-#define DECON_INT_EN			0x60
-#define DECON_INT_EN_FRAME_START	BIT(12)
-#define DECON_INT_EN_FRAME_DONE		BIT(13)
-#define DECON_INT_EN_GLOBAL		BIT(0)
-#define DECON_INT_PEND			0x70
-#define DECON_INT_PEND_FRAME_START	BIT(12)
-#define DECON_INT_PEND_FRAME_DONE	BIT(13)
-#define DECON_SHD_REG_UP_REQ		0x50
-#define DECON_SHD_REG_UP_REQ_ALL	(BIT(31) | 0x3f)
+#define DECON_GLOBAL_CON 0x20
+#define DECON_GLOBAL_CON_EN BIT(0)
+#define DECON_GLOBAL_CON_EN_F BIT(1)
+#define DECON_TRIG_CON 0x30
+#define DECON_TRIG_CON_SECURE 0x3c
+#define DECON_TRIG_HW_MASK BIT(4)
+#define DECON_TRIG_SW_EN BIT(8)
+#define DECON_TRIG_SW_DET_EN BIT(1)
+#define DECON_TRIG_HW_EN BIT(0)
+#define DECON_INT_EN 0x60
+#define DECON_INT_EN_FRAME_START BIT(12)
+#define DECON_INT_EN_FRAME_DONE BIT(13)
+#define DECON_INT_EN_GLOBAL BIT(0)
+#define DECON_INT_PEND 0x70
+#define DECON_INT_PEND_FRAME_START BIT(12)
+#define DECON_INT_PEND_FRAME_DONE BIT(13)
+#define DECON_SHD_REG_UP_REQ 0x50
+#define DECON_SHD_REG_UP_REQ_ALL (BIT(31) | 0x3f)
 
 static const char *const gs201_dpu_clk_names[] = {
 	"dma", "dpp", "dpu-apb", "decon", "disp-apb",
@@ -261,9 +261,8 @@ static void gs201_dpu_enable(struct drm_simple_display_pipe *pipe,
 
 	writel(DECON_INT_PEND_FRAME_START | DECON_INT_PEND_FRAME_DONE,
 	       dpu->decon + DECON_INT_PEND);
-	writel(readl(dpu->decon + DECON_INT_EN) |
-	       DECON_INT_EN_FRAME_START | DECON_INT_EN_FRAME_DONE |
-	       DECON_INT_EN_GLOBAL,
+	writel(readl(dpu->decon + DECON_INT_EN) | DECON_INT_EN_FRAME_START |
+		       DECON_INT_EN_FRAME_DONE | DECON_INT_EN_GLOBAL,
 	       dpu->decon + DECON_INT_EN);
 }
 

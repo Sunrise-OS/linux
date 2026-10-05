@@ -2439,7 +2439,7 @@ static const struct platform_device_id s2mps11_pmic_id[] = {
 	{ .name = "s2mps15-regulator", .driver_data = S2MPS15X },
 	{ .name = "s2mpu02-regulator", .driver_data = S2MPU02 },
 	{ .name = "s2mpu05-regulator", .driver_data = S2MPU05 },
-	{ }
+	{}
 };
 MODULE_DEVICE_TABLE(platform, s2mps11_pmic_id);
 
